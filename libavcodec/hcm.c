@@ -176,14 +176,14 @@ static av_cold int hcm_encode_init(AVCodecContext *avctx)
     avctx->bit_rate = avctx->block_align * 8LL * avctx->sample_rate;
     avctx->channel_layout = AV_CH_LAYOUT_MONO;
 
-    av_log(NULL, AV_LOG_INFO, "avctx->sample_rate: %d\n", avctx->sample_rate);
+    /*av_log(NULL, AV_LOG_INFO, "avctx->sample_rate: %d\n", avctx->sample_rate);
     av_log(NULL, AV_LOG_INFO, "avctx->channels: %d\n", avctx->channels);
     av_log(NULL, AV_LOG_INFO, "avctx->sample_fmt: %d\n", avctx->sample_fmt);
     av_log(NULL, AV_LOG_INFO, "avctx->frame_size: %d\n", avctx->frame_size);
     av_log(NULL, AV_LOG_INFO, "avctx->bits_per_coded_sample: %d\n", avctx->bits_per_coded_sample);
     av_log(NULL, AV_LOG_INFO, "avctx->block_align: %d\n", avctx->block_align);
     av_log(NULL, AV_LOG_INFO, "avctx->bit_rate: %d\n", avctx->bit_rate);
-    av_log(NULL, AV_LOG_INFO, "avctx->channel_layout: %d\n", avctx->channel_layout);
+    av_log(NULL, AV_LOG_INFO, "avctx->channel_layout: %d\n", avctx->channel_layout);*/
 
     return 0;
 }
@@ -290,7 +290,7 @@ static int hcm_decode_frame(AVCodecContext *avctx, void *data, int *got_frame_pt
     // avpkt            input AVPacket
     AVFrame *frame = data;
 
-    av_log(NULL, AV_LOG_INFO, "avpkt->size: %d\n", avpkt->size);
+    //av_log(NULL, AV_LOG_INFO, "avpkt->size: %d\n", avpkt->size);
 
     if (avpkt->size == 0 && hCMContext->lastFrameDecoded)
         return 0;
