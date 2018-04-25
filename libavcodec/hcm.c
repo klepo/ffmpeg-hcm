@@ -27,8 +27,12 @@
 #include <stdio.h>
 #include <complex.h>
 
-typedef _Fcomplex floatC;
-
+#ifdef _WIN32
+    typedef _Fcomplex floatC;
+#else
+    typedef float complex floatC;
+    #define _FCOMPLEX_(r, i) (float complex)((float)(r) + (float)(i) * I)
+#endif
 #define COMPLEX_R(r) _FCOMPLEX_(r, 0.0f)
 
 typedef struct HCMContext {
@@ -58,17 +62,17 @@ typedef struct HCMContext {
     int lastFrameDecoded;
 } HCMContext;
 
-floatC caddf(floatC n1, floatC n2)
+static floatC caddf(floatC n1, floatC n2)
 {
     return _FCOMPLEX_(crealf(n1) + crealf(n2), cimagf(n1) + cimagf(n2));
 }
 
-/*floatC csubf(floatC n1, floatC n2)
+/*static floatC csubf(floatC n1, floatC n2)
 {
     return _FCOMPLEX_(crealf(n1) - crealf(n2), cimagf(n1) - cimagf(n2));
 }*/
 
-floatC cmulf(floatC n1, floatC n2)
+static floatC cmulf(floatC n1, floatC n2)
 {
     return _FCOMPLEX_(crealf(n1) * crealf(n2) - cimagf(n1) * cimagf(n2), cimagf(n1) * crealf(n2) + crealf(n1) * cimagf(n2));
 }
@@ -202,15 +206,16 @@ static int hcm_encode_frame(AVCodecContext *avctx, AVPacket *avpkt, const AVFram
     int maxOutputFrames = (int)(floorf((float)(steps) / hCMContext->oSize));
     int64_t minOutputBytes = hCMContext->harmonics * (int64_t)sizeof(floatC);
     int64_t maxOutputBytes = maxOutputFrames * minOutputBytes;
+    float *dst;
+    const float *src = (const float *)frame->data[0];
+    int frames = 0;
 
     int ret;
     if ((ret = ff_alloc_packet2(avctx, avpkt, maxOutputBytes, minOutputBytes)) < 0)
         return ret;
 
-    float *dst = (float *)avpkt->data;
-    const float *src = (const float *)frame->data[0];
+    dst = (float *)avpkt->data;
 
-    int frames = 0;
     // For every step (input AVFrame)
     for (int step = 0; step < steps; step++) {
         // Compute local index
@@ -292,27 +297,31 @@ static int hcm_decode_frame(AVCodecContext *avctx, void *data, int *got_frame_pt
 
     //av_log(NULL, AV_LOG_INFO, "avpkt->size: %d\n", avpkt->size);
 
+    int frames;
+    int maxOutputSteps;
+    float *dst;
+    const float *src = (const float *)avpkt->data;
+    int ret;
+    int steps = 0;
+
     if (avpkt->size == 0 && hCMContext->lastFrameDecoded)
         return 0;
 
-    int frames = avpkt->size / (int)sizeof(floatC) / hCMContext->harmonics;
+    frames = avpkt->size / (int)sizeof(floatC) / hCMContext->harmonics;
 
     // Because of last coefficients duplication
     if (avpkt->size == 0) {
         frames = 2;
         hCMContext->lastFrameDecoded = 1;
     }
-    int maxOutputSteps = (frames) * hCMContext->oSize;
+    maxOutputSteps = (frames) * hCMContext->oSize;
 
-    int ret;
     frame->nb_samples = maxOutputSteps;
     if ((ret = ff_get_buffer(avctx, frame, 0)) < 0)
         return ret;
 
-    float *dst = (float *)frame->data[0];
-    const float *src = (const float *)avpkt->data;
+    dst = (float *)frame->data[0];
 
-    int steps = 0;
     // For every frame (input AVPacket)
     for (int frame = 0; frame < frames; frame++) {
         uint64_t framesOffsetGlobal = hCMContext->frameOffset + (uint64_t)frame;
@@ -324,7 +333,7 @@ static int hcm_decode_frame(AVCodecContext *avctx, void *data, int *got_frame_pt
 
             // For every hamornics
             for (int ih = 0; ih < hCMContext->harmonics; ih++) {
-
+                int sH = ih * hCMContext->bSize + stepLocal;
                 if (stepLocal == 0) {
                     int iHC = 2 * ih;
 
@@ -344,7 +353,6 @@ static int hcm_decode_frame(AVCodecContext *avctx, void *data, int *got_frame_pt
                 }
 
                 // Compute new point value
-                int sH = ih * hCMContext->bSize + stepLocal;
                 dst[steps] += crealf(cmulf(hCMContext->sCTmp2[ih], hCMContext->bE[sH])) + crealf(cmulf(hCMContext->sCTmp1[ih], hCMContext->bE_1[sH]));
             }
             steps++;
