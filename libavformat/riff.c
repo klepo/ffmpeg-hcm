@@ -483,6 +483,7 @@ const AVCodecTag ff_codec_wav_tags[] = {
     { AV_CODEC_ID_PCM_F32LE,       0x0003 },
     /* must come after f32le in this list */
     { AV_CODEC_ID_PCM_F64LE,       0x0003 },
+    { AV_CODEC_ID_HCM,             0x0003 },
     { AV_CODEC_ID_PCM_ALAW,        0x0006 },
     { AV_CODEC_ID_PCM_MULAW,       0x0007 },
     { AV_CODEC_ID_WMAVOICE,        0x000A },

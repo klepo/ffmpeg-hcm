@@ -2269,6 +2269,13 @@ static const AVCodecDescriptor codec_descriptors[] = {
         .props     = AV_CODEC_PROP_LOSSY,
     },
     {
+        .id        = AV_CODEC_ID_HCM,
+        .type      = AVMEDIA_TYPE_AUDIO,
+        .name      = "hcm",
+        .long_name = NULL_IF_CONFIG_SMALL("HCM (HIFU compression method)"),
+        .props     = AV_CODEC_PROP_LOSSY,
+    },
+    {
         .id        = AV_CODEC_ID_MP3,
         .type      = AVMEDIA_TYPE_AUDIO,
         .name      = "mp3",

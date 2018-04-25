@@ -433,6 +433,8 @@ OBJS-$(CONFIG_MP2_ENCODER)             += mpegaudioenc_float.o mpegaudio.o \
 OBJS-$(CONFIG_MP2FIXED_ENCODER)        += mpegaudioenc_fixed.o mpegaudio.o \
                                           mpegaudiodata.o mpegaudiodsp_data.o
 OBJS-$(CONFIG_MP2FLOAT_DECODER)        += mpegaudiodec_float.o
+OBJS-$(CONFIG_HCM_ENCODER)             += hcm.o
+OBJS-$(CONFIG_HCM_DECODER)             += hcm.o
 OBJS-$(CONFIG_MP3_DECODER)             += mpegaudiodec_fixed.o
 OBJS-$(CONFIG_MP3ADU_DECODER)          += mpegaudiodec_fixed.o
 OBJS-$(CONFIG_MP3ADUFLOAT_DECODER)     += mpegaudiodec_float.o

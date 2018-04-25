@@ -606,7 +606,7 @@ static int64_t find_guid(AVIOContext *pb, const uint8_t guid1[16])
     return AVERROR_EOF;
 }
 
-#define MAX_SIZE 4096
+#define MAX_SIZE 4096 //Tohle muzu asi zmenit
 
 static int wav_read_packet(AVFormatContext *s, AVPacket *pkt)
 {

@@ -432,6 +432,8 @@ extern AVCodec ff_mp2_encoder;
 extern AVCodec ff_mp2_decoder;
 extern AVCodec ff_mp2float_decoder;
 extern AVCodec ff_mp2fixed_encoder;
+extern AVCodec ff_hcm_decoder;
+extern AVCodec ff_hcm_encoder;
 extern AVCodec ff_mp3float_decoder;
 extern AVCodec ff_mp3_decoder;
 extern AVCodec ff_mp3adufloat_decoder;
