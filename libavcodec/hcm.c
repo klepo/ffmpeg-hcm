@@ -33,7 +33,7 @@
     typedef float complex floatC;
     #define _FCOMPLEX_(r, i) (float complex)((float)(r) + (float)(i) * I)
 #endif
-#define COMPLEX_R(r) _FCOMPLEX_(r, 0.0f)
+#define COMPLEX_R(r) _FCOMPLEX_((r), (0.0f))
 
 typedef struct HCMContext {
     AVClass *class;
@@ -41,6 +41,7 @@ typedef struct HCMContext {
     int period;
     int harmonics;
     int mos;
+    int bytes;
 
     int oSize;
     int bSize;
@@ -60,6 +61,8 @@ typedef struct HCMContext {
     uint64_t stepOffset;
 
     int lastFrameDecoded;
+
+    float rC;
 } HCMContext;
 
 static floatC caddf(floatC n1, floatC n2)
@@ -150,6 +153,15 @@ static void initHCMContext(HCMContext *hCMContext, int normalize)
     }
 
     hCMContext->lastFrameDecoded = 0;
+
+    // TODO Check bytes (2, 4, 8)
+    // hCMContext->bytes
+
+    //hCMContext->rC = (float)(32767) / 50.0e6f;
+    if (hCMContext->bytes == 4)
+        hCMContext->rC = (float)(32767);
+    if (hCMContext->bytes == 2)
+        hCMContext->rC = (float)(127);
 }
 
 static void freeHCMContext(HCMContext *hCMContext)
@@ -173,9 +185,9 @@ static av_cold int hcm_encode_init(AVCodecContext *avctx)
 
     avctx->sample_rate = 48000;
     avctx->channels = 1;
-    avctx->sample_fmt = avctx->codec->sample_fmts[0];
-    //avctx->frame_size = 10;
+    avctx->sample_fmt = AV_SAMPLE_FMT_FLT;//avctx->codec->sample_fmts[0];
     avctx->bits_per_coded_sample = 32;
+    //avctx->frame_size = 10;
     avctx->block_align = 2 * hCMContext->harmonics * avctx->channels * avctx->bits_per_coded_sample / 8;
     avctx->bit_rate = avctx->block_align * 8LL * avctx->sample_rate;
     avctx->channel_layout = AV_CH_LAYOUT_MONO;
@@ -204,17 +216,28 @@ static int hcm_encode_frame(AVCodecContext *avctx, AVPacket *avpkt, const AVFram
 
     int steps = frame->nb_samples;
     int maxOutputFrames = (int)(floorf((float)(steps) / hCMContext->oSize));
-    int64_t minOutputBytes = hCMContext->harmonics * (int64_t)sizeof(floatC);
+    int64_t minOutputBytes = hCMContext->harmonics * hCMContext->bytes;
     int64_t maxOutputBytes = maxOutputFrames * minOutputBytes;
     float *dst;
+    int16_t *dst16;
+    int8_t *dst8;
     const float *src = (const float *)frame->data[0];
     int frames = 0;
 
+    /*av_log(NULL, AV_LOG_INFO, "frame->channel_layout: %d\n", frame->channel_layout);
+    av_log(NULL, AV_LOG_INFO, "frame->channels: %d\n", frame->channels);
+    av_log(NULL, AV_LOG_INFO, "frame->format: %d\n", frame->format);
+    av_log(NULL, AV_LOG_INFO, "frame->sample_rate: %d\n", frame->sample_rate);
+    av_log(NULL, AV_LOG_INFO, "frame->nb_samples: %d\n", frame->nb_samples);*/
+
     int ret;
+
     if ((ret = ff_alloc_packet2(avctx, avpkt, maxOutputBytes, minOutputBytes)) < 0)
         return ret;
 
     dst = (float *)avpkt->data;
+    dst16 = (int16_t *)avpkt->data;
+    dst8 = (int8_t *)avpkt->data;
 
     // For every step (input AVFrame)
     for (int step = 0; step < steps; step++) {
@@ -236,7 +259,19 @@ static int hcm_encode_frame(AVCodecContext *avctx, AVPacket *avpkt, const AVFram
 
             // Drop first "half" frame
             if (hCMContext->frame > 0) {
-                memcpy(dst + frames * 2 * hCMContext->harmonics, dataC, sizeof(floatC) * (size_t)hCMContext->harmonics);
+                if (hCMContext->bytes == 8) {
+                    memcpy(dst + frames * 2 * hCMContext->harmonics, dataC, sizeof(floatC) * (size_t)hCMContext->harmonics);
+                } else if (hCMContext->bytes == 4) {
+                    for (int ih = 0; ih < hCMContext->harmonics; ih++) {
+                        dst16[frames * 2 * hCMContext->harmonics + 2 * ih] = (int16_t)(crealf(dataC[ih]) * hCMContext->rC);
+                        dst16[frames * 2 * hCMContext->harmonics + 2 * ih + 1] = (int16_t)(cimagf(dataC[ih]) * hCMContext->rC);
+                    }
+                } else if (hCMContext->bytes == 2) {
+                    for (int ih = 0; ih < hCMContext->harmonics; ih++) {
+                        dst8[frames * 2 * hCMContext->harmonics + 2 * ih] = (int8_t)(crealf(dataC[ih]) * hCMContext->rC);
+                        dst8[frames * 2 * hCMContext->harmonics + 2 * ih + 1] = (int8_t)(cimagf(dataC[ih]) * hCMContext->rC);
+                    }
+                }
                 frames++;
             }
 
@@ -252,7 +287,7 @@ static int hcm_encode_frame(AVCodecContext *avctx, AVPacket *avpkt, const AVFram
     // Increment global number of steps
     hCMContext->stepOffset += (uint64_t)steps;
 
-    avpkt->size = frames * hCMContext->harmonics * (int64_t)sizeof(floatC);
+    avpkt->size = frames * hCMContext->harmonics * hCMContext->bytes;
     *got_packet_ptr = 1;
     return 0;
 }
@@ -266,12 +301,13 @@ static av_cold int hcm_encode_close(AVCodecContext *avctx)
 static av_cold int hcm_decode_init(AVCodecContext *avctx)
 {
     HCMContext *hCMContext = avctx->priv_data;
+
     initHCMContext(hCMContext, 0);
 
     hCMContext->step = 0;
     hCMContext->frameOffset = 0;
 
-    avctx->sample_fmt = avctx->codec->sample_fmts[0];
+    avctx->sample_fmt = AV_SAMPLE_FMT_FLT;
 
     /*av_log(NULL, AV_LOG_INFO, "avctx->sample_rate: %d\n", avctx->sample_rate);
     av_log(NULL, AV_LOG_INFO, "avctx->channels: %d\n", avctx->channels);
@@ -295,19 +331,19 @@ static int hcm_decode_frame(AVCodecContext *avctx, void *data, int *got_frame_pt
     // avpkt            input AVPacket
     AVFrame *frame = data;
 
-    //av_log(NULL, AV_LOG_INFO, "avpkt->size: %d\n", avpkt->size);
-
     int frames;
     int maxOutputSteps;
     float *dst;
     const float *src = (const float *)avpkt->data;
+    const int16_t *src16 = (const int16_t *)avpkt->data;
+    const int8_t *src8 = (const int8_t *)avpkt->data;
     int ret;
     int steps = 0;
 
     if (avpkt->size == 0 && hCMContext->lastFrameDecoded)
         return 0;
 
-    frames = avpkt->size / (int)sizeof(floatC) / hCMContext->harmonics;
+    frames = avpkt->size / hCMContext->bytes / hCMContext->harmonics;
 
     // Because of last coefficients duplication
     if (avpkt->size == 0) {
@@ -319,6 +355,12 @@ static int hcm_decode_frame(AVCodecContext *avctx, void *data, int *got_frame_pt
     frame->nb_samples = maxOutputSteps;
     if ((ret = ff_get_buffer(avctx, frame, 0)) < 0)
         return ret;
+
+    /*av_log(NULL, AV_LOG_INFO, "frame->channel_layout: %d\n", frame->channel_layout);
+    av_log(NULL, AV_LOG_INFO, "frame->channels: %d\n", frame->channels);
+    av_log(NULL, AV_LOG_INFO, "frame->format: %d\n", frame->format);
+    av_log(NULL, AV_LOG_INFO, "frame->sample_rate: %d\n", frame->sample_rate);
+    av_log(NULL, AV_LOG_INFO, "frame->nb_samples: %d\n", frame->nb_samples);*/
 
     dst = (float *)frame->data[0];
 
@@ -341,14 +383,26 @@ static int hcm_decode_frame(AVCodecContext *avctx, void *data, int *got_frame_pt
                     hCMContext->sCTmp1[ih] = hCMContext->sCTmp2[ih];
 
                     // Copy first coefficients
-                    if (framesOffsetGlobal == 0)
-                        hCMContext->sCTmp1[ih] = conjf(_FCOMPLEX_(src[iHC], src[iHC + 1]));
-
+                    if (framesOffsetGlobal == 0) {
+                        if (hCMContext->bytes == 8) {
+                            hCMContext->sCTmp1[ih] = conjf(_FCOMPLEX_(src[iHC], src[iHC + 1]));
+                        } else if (hCMContext->bytes == 4) {
+                            hCMContext->sCTmp1[ih] = conjf(_FCOMPLEX_((float)src16[iHC] / hCMContext->rC, (float)src16[iHC + 1] / hCMContext->rC));
+                        } else if (hCMContext->bytes == 2) {
+                            hCMContext->sCTmp1[ih] = conjf(_FCOMPLEX_((float)src8[iHC] / hCMContext->rC, (float)src8[iHC + 1] / hCMContext->rC));
+                        }
+                    }
                     // Don't load last two coefficients (duplicate)
                     if (avpkt->size != 0) {
                         int fiHC = frameOffset + iHC;
                         // Read coefficient
-                        hCMContext->sCTmp2[ih] = conjf(_FCOMPLEX_(src[fiHC], src[fiHC + 1]));
+                        if (hCMContext->bytes == 8) {
+                            hCMContext->sCTmp2[ih] = conjf(_FCOMPLEX_(src[fiHC], src[fiHC + 1]));
+                        } else if (hCMContext->bytes == 4) {
+                            hCMContext->sCTmp2[ih] = conjf(_FCOMPLEX_((float)src16[fiHC] / hCMContext->rC, (float)src16[fiHC + 1] / hCMContext->rC));
+                        } else if (hCMContext->bytes == 2) {
+                            hCMContext->sCTmp2[ih] = conjf(_FCOMPLEX_((float)src8[fiHC] / hCMContext->rC, (float)src8[fiHC + 1] / hCMContext->rC));
+                        }
                     }
                 }
 
@@ -377,6 +431,7 @@ static const AVOption options[] = {
     {"period", "Period of input signal", offsetof(HCMContext, period), AV_OPT_TYPE_INT, {.i64 = 15}, 1, 10000, AV_OPT_FLAG_DECODING_PARAM | AV_OPT_FLAG_ENCODING_PARAM | AV_OPT_FLAG_AUDIO_PARAM },
     {"harmonics", "Multiple of harmonic frequency", offsetof(HCMContext, harmonics), AV_OPT_TYPE_INT, {.i64 = 2}, 1, 20, AV_OPT_FLAG_DECODING_PARAM | AV_OPT_FLAG_ENCODING_PARAM | AV_OPT_FLAG_AUDIO_PARAM },
     {"mos", "Multiple of overlap size", offsetof(HCMContext, mos), AV_OPT_TYPE_INT, {.i64 = 1}, 1, 100, AV_OPT_FLAG_DECODING_PARAM | AV_OPT_FLAG_ENCODING_PARAM | AV_OPT_FLAG_AUDIO_PARAM },
+    {"bytes", "Number of bytes for coefficient (8, 4, 2)", offsetof(HCMContext, bytes), AV_OPT_TYPE_INT, {.i64 = 8}, 2, 8, AV_OPT_FLAG_DECODING_PARAM | AV_OPT_FLAG_ENCODING_PARAM | AV_OPT_FLAG_AUDIO_PARAM },
     {NULL}
 };
 
