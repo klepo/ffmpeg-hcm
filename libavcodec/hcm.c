@@ -263,13 +263,13 @@ static int hcm_encode_frame(AVCodecContext *avctx, AVPacket *avpkt, const AVFram
                     memcpy(dst + frames * 2 * hCMContext->harmonics, dataC, sizeof(floatC) * (size_t)hCMContext->harmonics);
                 } else if (hCMContext->bytes == 4) {
                     for (int ih = 0; ih < hCMContext->harmonics; ih++) {
-                        dst16[frames * 2 * hCMContext->harmonics + 2 * ih] = (int16_t)(crealf(dataC[ih]) * hCMContext->rC);
-                        dst16[frames * 2 * hCMContext->harmonics + 2 * ih + 1] = (int16_t)(cimagf(dataC[ih]) * hCMContext->rC);
+                        dst16[frames * 2 * hCMContext->harmonics + 2 * ih] = (int16_t)(roundf(crealf(dataC[ih]) * hCMContext->rC));
+                        dst16[frames * 2 * hCMContext->harmonics + 2 * ih + 1] = (int16_t)(roundf(cimagf(dataC[ih]) * hCMContext->rC));
                     }
                 } else if (hCMContext->bytes == 2) {
                     for (int ih = 0; ih < hCMContext->harmonics; ih++) {
-                        dst8[frames * 2 * hCMContext->harmonics + 2 * ih] = (int8_t)(crealf(dataC[ih]) * hCMContext->rC);
-                        dst8[frames * 2 * hCMContext->harmonics + 2 * ih + 1] = (int8_t)(cimagf(dataC[ih]) * hCMContext->rC);
+                        dst8[frames * 2 * hCMContext->harmonics + 2 * ih] = (int8_t)(roundf(crealf(dataC[ih]) * hCMContext->rC));
+                        dst8[frames * 2 * hCMContext->harmonics + 2 * ih + 1] = (int8_t)(roundf(cimagf(dataC[ih]) * hCMContext->rC));
                     }
                 }
                 frames++;
