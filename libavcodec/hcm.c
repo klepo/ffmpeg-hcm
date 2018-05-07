@@ -158,6 +158,7 @@ static void initHCMContext(HCMContext *hCMContext, int normalize)
     // hCMContext->bytes
 
     //hCMContext->rC = (float)(32767) / 50.0e6f;
+    // 67108864.0f
     if (hCMContext->bytes == 4)
         hCMContext->rC = (float)(32767);
     if (hCMContext->bytes == 2)
@@ -344,6 +345,11 @@ static int hcm_decode_frame(AVCodecContext *avctx, void *data, int *got_frame_pt
         return 0;
 
     frames = avpkt->size / hCMContext->bytes / hCMContext->harmonics;
+
+    if (avpkt->size == 0 && hCMContext->frameOffset == 0) {
+        //*got_frame_ptr = 1;
+        return avpkt->size;
+    }
 
     // Because of last coefficients duplication
     if (avpkt->size == 0) {
